@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Login</title>
+</head>
+<body>
+    <h1>RFID Login</h1>
+    <p>Please scan your RFID card...</p>
+
+    <!-- Add a button to initiate serial connection -->
+    <button id="startButton">Start RFID Scan</button>
+
+    <script>
+      let timeout; // Declare timeout variable globally to clear it later.
+
+      // Function to handle the serial communication and redirect
+      async function listenForRedirect() {
+        try {
+          console.log("Requesting serial port...");
+          
+          // Request the serial port access from the user
+          const port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 9600 });
+          console.log("Serial port opened successfully.");
+          
+          const reader = port.readable.getReader();
+          let decoder = new TextDecoder();
+          let data = '';
+          
+          // Function to trigger redirect after 5 minutes (300,000 milliseconds)
+          function redirectAfterTimeout() {
+            console.log("No card detected for 5 minutes. Redirecting now...");
+            window.location.href = "http://127.0.0.1:5500/public/index.html";  // Redirect to index.html
+          }
+          
+          // Set timeout for 5 minutes (300,000 milliseconds)
+          timeout = setTimeout(redirectAfterTimeout, 300000); 
+
+          // Continuously read data from the serial port
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            data += decoder.decode(value);
+
+            // Log the incoming data for debugging
+            console.log("Data from Arduino:", data);
+
+            // If the "REDIRECT" message is received, clear timeout and redirect
+            if (data.includes("REDIRECT")) {
+              console.log("Redirecting now...");  // Log when redirect is triggered
+              clearTimeout(timeout);  // Clear the timeout so it doesn't trigger after the card is scanned
+              window.location.href = "http://127.0.0.1:5500/public/index.html";  // Update with full URL
+              break; // Exit the loop once redirected
+            }
+          }
+        } catch (error) {
+          console.error('Error with serial communication:', error);
+          
+          // Error handling for specific Web Serial API issues
+          if (error instanceof DOMException) {
+            console.error("Web Serial API error: ", error.message);
+            alert("Failed to open serial port. Please ensure that the Arduino is properly connected.");
+          } else {
+            // General error handling for unexpected issues
+            console.error("An unexpected error occurred: ", error);
+            alert("An unexpected error occurred. Please try again.");
+          }
+        }
+      }
+
+      // Event listener for the "Start RFID Scan" button
+      document.getElementById("startButton").addEventListener("click", () => {
+        listenForRedirect(); // Start the serial communication when the user clicks the button
+      });
+    </script>
+</body>
+</html>
